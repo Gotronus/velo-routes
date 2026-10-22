@@ -1,0 +1,15 @@
+# donnees lourdes : regenerees par le pipeline, jamais versionnees
+*.osm.pbf
+data/*.json
+data/dem/
+!web/data/index.json
+
+# sorties de scan et journaux
+scan_*.txt
+report_*.txt
+web_index*.txt
+*.err.txt
+
+# python
+__pycache__/
+*.pyc

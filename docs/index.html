@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Parcours d'entraînement</title>
+<meta name="description" content="Trouve une route qui ne s'arrête pas assez longtemps pour ta séance.">
+<meta name="theme-color" content="#0f1b2d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --bg:#f6f7f9; --bg2:#fff; --line:#dfe3e8; --tx:#15202b; --tx2:#4a5a6a; --tx3:#7b8a99;
+  --accent:#0f6fd6; --green:#128a5b; --amber:#9a6400; --red:#b02a28; --chip:#eef1f4;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d1420; --bg2:#141d2b; --line:#243244; --tx:#e8edf3; --tx2:#a7b6c6; --tx3:#71808f;
+  --accent:#58a6ff; --green:#34d399; --amber:#fbbf24; --red:#f87171; --chip:#1c2836;
+}}
+:root[data-theme="dark"]{
+  --bg:#0d1420; --bg2:#141d2b; --line:#243244; --tx:#e8edf3; --tx2:#a7b6c6; --tx3:#71808f;
+  --accent:#58a6ff; --green:#34d399; --amber:#fbbf24; --red:#f87171; --chip:#1c2836;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);
+  font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-text-size-adjust:100%}
+.wrap{max-width:860px;margin:0 auto;padding:0 16px 48px}
+header{padding:18px 0 12px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+h1{font-size:19px;margin:0;letter-spacing:-.01em}
+.sub{color:var(--tx3);font-size:12.5px}
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:12px;
+  padding:14px;margin-bottom:12px}
+label{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--tx3);margin-bottom:5px}
+select,input,button{font:inherit;color:var(--tx);background:var(--bg2);
+  border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%}
+input[type=range]{padding:0;border:0;background:none}
+button{cursor:pointer;background:var(--chip);border-color:var(--line);width:auto}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+.row{display:grid;gap:10px;margin-bottom:10px}
+@media(min-width:620px){.row.c2{grid-template-columns:1fr 1fr}.row.c3{grid-template-columns:1fr 1fr 1fr}}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.need{background:var(--chip);border-radius:8px;padding:10px 12px;margin:10px 0 0;
+  font-size:13px;color:var(--tx2)}
+.need b{color:var(--tx)}
+#map{height:300px;border-radius:10px;border:1px solid var(--line);background:var(--chip)}
+.hit{border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:8px;
+  background:var(--bg2);cursor:pointer}
+.hit:hover{border-color:var(--accent)}
+.hit.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.hit .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.hit .nm{font-weight:650}
+.hit .km{font-variant-numeric:tabular-nums;font-weight:650}
+.hit .meta{color:var(--tx3);font-size:12.5px;margin-top:3px;
+  display:flex;gap:10px;flex-wrap:wrap}
+.tag{display:inline-block;padding:1px 7px;border-radius:99px;font-size:11px;
+  background:var(--chip);color:var(--tx2)}
+.tag.ok{background:color-mix(in srgb,var(--green) 18%,transparent);color:var(--green)}
+.tag.warn{background:color-mix(in srgb,var(--amber) 20%,transparent);color:var(--amber)}
+.tag.ar{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+.empty{color:var(--tx3);text-align:center;padding:22px 10px;font-size:13.5px}
+.note{font-size:12.5px;color:var(--tx3);margin:10px 0 0}
+details summary{cursor:pointer;color:var(--tx2);font-size:13px}
+details{margin-top:8px}
+.mono{font-variant-numeric:tabular-nums}
+.sp{display:flex;justify-content:space-between;font-size:12px;color:var(--tx3)}
+.ldg{color:var(--tx3);font-size:13px;padding:6px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Parcours d'entraînement</h1>
+  <span class="sub" id="hdr">chargement de l'index…</span>
+</header>
+
+<div class="card">
+  <div class="row c2">
+    <div>
+      <label for="ses">Séance</label>
+      <select id="ses"></select>
+    </div>
+    <div>
+      <label for="start">Point de départ</label>
+      <select id="start">
+        <option value="47.4712,-0.5518">Angers</option>
+        <option value="46.8286,-1.4306">Beaufou</option>
+        <option value="geo">Ma position…</option>
+      </select>
+    </div>
+  </div>
+  <div class="row c2">
+    <div>
+      <label for="rad">Rayon de recherche <span id="radv" class="mono">25</span> km</label>
+      <input type="range" id="rad" min="5" max="80" step="5" value="25">
+    </div>
+    <div>
+      <label for="mode">Tolérance</label>
+      <select id="mode">
+        <option value="clean">Aucun carrefour douteux</option>
+        <option value="few" selected>Jusqu'à 3 doutes</option>
+        <option value="any">Tout accepter</option>
+      </select>
+    </div>
+  </div>
+  <div class="need" id="need"></div>
+  <details>
+    <summary>Réglages du modèle</summary>
+    <div class="row c3" style="margin-top:10px">
+      <div><label for="ftp">FTP ou CP (W)</label><input type="number" id="ftp" value="260" min="120" max="500"></div>
+      <div><label for="pos">Position</label><select id="pos">
+        <option value="0.32">Cocottes — 0,32</option>
+        <option value="0.29" selected>Mains en bas — 0,29</option>
+        <option value="0.23">Chrono — 0,23</option>
+      </select></div>
+      <div><label for="temp">Température (°C)</label><input type="number" id="temp" value="10" min="-10" max="45"></div>
+    </div>
+    <p class="note">Masse totale 76 kg, Crr 0,005. Le CdA vient de Crouch et coll. 2017 : moyennes de soufflerie, pas ta mesure. Et le temps d'une portion est calculé sur sa <b>pente moyenne</b>, pas sur son profil détaillé — sur une route vallonnée il est légèrement sous-estimé.</p>
+  </details>
+</div>
+
+<div class="card">
+  <div id="map"></div>
+  <div class="btnrow" style="margin-top:10px">
+    <button id="gpx" disabled>Télécharger le GPX</button>
+    <button id="osm" disabled>Ouvrir dans OpenStreetMap</button>
+    <span class="sub" id="selinfo"></span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="sp" style="margin-bottom:8px"><span id="count">—</span><span class="sub">triées par fiabilité puis longueur</span></div>
+  <div id="list"><div class="empty">…</div></div>
+</div>
+
+<p class="note">Les carrefours « douteux » sont des intersections où une route de rang égal ou supérieur débouche : OpenStreetMap ne décrit pas la priorité, donc ils sont signalés, pas devinés. Données routières © contributeurs OpenStreetMap, sous licence ODbL. Relief SRTM, résolution ~30 m.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ---------- modele physique, identique a physics.py ---------- */
+var G=9.80665, R_AIR=287.058, MASS=76, CRR=0.005;
+function airRho(t,alt){var p=101325*Math.pow(1-2.25577e-5*Math.max(0,alt),5.25588);
+  return p/(R_AIR*(t+273.15));}
+function powerFor(v,grade,cda,rho){var th=Math.atan(grade);
+  return v*(MASS*G*(Math.sin(th)+CRR*Math.cos(th)))+0.5*rho*cda*v*v*v;}
+function speedFor(pw,grade,cda,rho){
+  var lo=0.05,hi=35;
+  if(powerFor(hi,grade,cda,rho)<pw)return hi;
+  if(powerFor(lo,grade,cda,rho)>pw)return hi;
+  for(var i=0;i<50;i++){var m=0.5*(lo+hi);
+    if(powerFor(m,grade,cda,rho)<pw)lo=m;else hi=m;}
+  return 0.5*(lo+hi);
+}
+/* ---------- seances : duree d'un intervalle et fraction de FTP ----------
+   Les fractions viennent des structures ecrites des seances du Training Lab,
+   pas des IF du catalogue (qui sont optimistes de 8 a 22 %). */
+var SES=[
+ {id:"t2x25", n:"2 × 25 min au seuil",  s:1500, f:1.00},
+ {id:"t3x20", n:"3 × 20 min au seuil",  s:1200, f:0.99},
+ {id:"ss3x20",n:"3 × 20 min sweet spot",s:1200, f:0.875},
+ {id:"t2x15", n:"2 × 15 min au seuil",  s:900,  f:0.98},
+ {id:"ss2x15",n:"2 × 15 min sweet spot",s:900,  f:0.875},
+ {id:"tempo3x12",n:"3 × 12 min tempo",  s:720,  f:0.83},
+ {id:"v4x8",  n:"4 × 8 min VO2",        s:480,  f:1.09},
+ {id:"fv6x5", n:"6 × 5 min force-vitesse",s:300,f:0.92},
+ {id:"v6x4",  n:"6 × 4 min VO2",        s:240,  f:1.13},
+ {id:"v5x3",  n:"5 × 3 min VO2",        s:180,  f:1.13},
+ {id:"v6x2",  n:"6 × 2 min VO2",        s:120,  f:1.16},
+ {id:"a8x1",  n:"8 × 1 min anaérobie",  s:60,   f:1.35}
+];
+var CLS={6:"départementale",5:"dép. petite",4:"sans classe",3:"rue",2:"zone 20",1:"desserte"};
+
+var DATA=null, MAP=null, LAYER=null, MARK=null, HITS=[], SEL=-1, TILES=null;
+var $=function(id){return document.getElementById(id);};
+
+/* ---------- geometrie ---------- */
+function decode(d,scale){
+  var out=[],la=0,lo=0;
+  for(var i=0;i<d.length;i+=2){la+=d[i];lo+=d[i+1];out.push([la*scale,lo*scale]);}
+  return out;
+}
+function hav(a,b,c,d){
+  var p1=a*Math.PI/180,p2=c*Math.PI/180,dp=p2-p1,dl=(d-b)*Math.PI/180;
+  var h=Math.sin(dp/2)*Math.sin(dp/2)+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)*Math.sin(dl/2);
+  return 2*6371000*Math.asin(Math.min(1,Math.sqrt(h)));
+}
+function nearest(line,la,lo){
+  var best=1e12;
+  for(var i=0;i<line.length;i++){var d=hav(la,lo,line[i][0],line[i][1]);if(d<best)best=d;}
+  return best;
+}
+
+/* ---------- etat ---------- */
+function opts(){
+  return {ftp:+$("ftp").value||260, cda:+$("pos").value||0.29,
+          rho:airRho(+$("temp").value||10,50), rad:+$("rad").value,
+          mode:$("mode").value, ses:SES[$("ses").selectedIndex]};
+}
+function savePrefs(){
+  try{localStorage.setItem("vr_prefs",JSON.stringify({
+    ftp:$("ftp").value,pos:$("pos").value,temp:$("temp").value,
+    rad:$("rad").value,mode:$("mode").value,ses:$("ses").selectedIndex,
+    start:$("start").value}));}catch(e){}
+}
+function loadPrefs(){
+  try{var p=JSON.parse(localStorage.getItem("vr_prefs")||"null");if(!p)return;
+    if(p.ftp)$("ftp").value=p.ftp; if(p.pos)$("pos").value=p.pos;
+    if(p.temp)$("temp").value=p.temp; if(p.rad){$("rad").value=p.rad;$("radv").textContent=p.rad;}
+    if(p.mode)$("mode").value=p.mode;
+    if(p.ses!=null&&p.ses<SES.length)$("ses").selectedIndex=p.ses;
+    if(p.start&&p.start!=="geo")$("start").value=p.start;
+  }catch(e){}
+}
+
+/* ---------- recherche ---------- */
+var START=[47.4712,-0.5518];
+function search(){
+  if(!DATA){return;}
+  var o=opts(), pw=o.ftp*o.ses.f, maxd=o.mode==="clean"?0:(o.mode==="few"?3:99);
+  var vflat=speedFor(pw,0,o.cda,o.rho);
+  $("need").innerHTML="<b>"+o.ses.n+"</b> : "+Math.round(pw)+" W par intervalle, "+
+    (vflat*3.6).toFixed(1)+" km/h à plat, soit <b>"+(vflat*o.ses.s/1000).toFixed(2)+
+    " km</b> de route sans arrêt pour un seul intervalle.";
+  var res=[];
+  for(var i=0;i<DATA.rows.length;i++){
+    var r=DATA.rows[i];
+    if(r[2]>maxd)continue;
+    var km=r[0]/100, grade=r[1]/10000;
+    var v=speedFor(pw,grade,o.cda,o.rho), t=km*1000/v;
+    var direct=t>=o.ses.s, ar=(2*t)>=o.ses.s;
+    if(!ar)continue;
+    var line=decode(r[6],DATA.scale);
+    var dist=nearest(line,START[0],START[1]);
+    if(dist>o.rad*1000)continue;
+    res.push({km:km,grade:r[1]/100,doubts:r[2],rank:r[3],gain:r[4],name:r[5],
+              line:line,t:t,direct:direct,dist:dist});
+  }
+  res.sort(function(a,b){
+    if(a.direct!==b.direct)return a.direct?-1:1;
+    if(a.doubts!==b.doubts)return a.doubts-b.doubts;
+    return b.km-a.km;
+  });
+  HITS=res.slice(0,60);
+  render();
+}
+function render(){
+  var o=opts();
+  var nd=HITS.filter(function(h){return h.direct;}).length;
+  $("count").textContent=HITS.length?
+    (HITS.length+" portion"+(HITS.length>1?"s":"")+" — "+nd+" en direct, "+
+     (HITS.length-nd)+" en aller-retour seulement"):"aucune portion";
+  if(!HITS.length){
+    $("list").innerHTML='<div class="empty">Rien à ce rayon avec cette tolérance.<br>'+
+      'Élargis le rayon, accepte des carrefours douteux, ou prends une séance à intervalles plus courts.</div>';
+    return;
+  }
+  var h="";
+  for(var i=0;i<HITS.length;i++){
+    var x=HITS[i];
+    h+='<div class="hit'+(i===SEL?' on':'')+'" data-i="'+i+'">'+
+      '<div class="top"><span class="nm">'+esc(x.name)+'</span>'+
+      '<span class="km">'+x.km.toFixed(2)+' km</span></div>'+
+      '<div class="meta">'+
+      '<span>'+(x.direct?'<span class="tag ok">'+fmin(x.t)+' d\'un seul tenant</span>'
+                        :'<span class="tag ar">'+fmin(x.t)+' par passage, ×2 en aller-retour</span>')+'</span>'+
+      '<span>'+(x.doubts===0?'<span class="tag ok">0 doute</span>'
+                            :'<span class="tag warn">'+x.doubts+' doute'+(x.doubts>1?'s':'')+'</span>')+'</span>'+
+      '<span class="tag">'+(x.grade>=0?'+':'')+x.grade.toFixed(2)+' %</span>'+
+      '<span class="tag">'+x.gain+' m D+</span>'+
+      '<span class="tag">'+(CLS[x.rank]||'?')+'</span>'+
+      '<span class="tag">à '+(x.dist/1000).toFixed(1)+' km</span>'+
+      '</div></div>';
+  }
+  $("list").innerHTML=h;
+  var ns=$("list").querySelectorAll(".hit");
+  for(var j=0;j<ns.length;j++)ns[j].onclick=function(){select(+this.dataset.i);};
+}
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function fmin(s){var m=Math.floor(s/60),ss=Math.round(s%60);
+  return m+" min"+(ss?" "+(ss<10?"0":"")+ss:"");}
+
+/* ---------- carte ---------- */
+function initMap(){
+  if(!window.L){$("map").innerHTML='<div class="empty">Carte indisponible hors connexion — '+
+    'les portions restent listées et exportables.</div>';return;}
+  MAP=L.map("map",{zoomControl:true}).setView(START,10);
+  TILES=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {maxZoom:18,attribution:"© OpenStreetMap"});
+  TILES.addTo(MAP);
+  MARK=L.circleMarker(START,{radius:6,color:"#fff",weight:2,fillColor:"#0f6fd6",
+    fillOpacity:1}).addTo(MAP);
+}
+function select(i){
+  SEL=i;render();
+  var x=HITS[i];if(!x)return;
+  $("selinfo").textContent=x.name+" · "+x.km.toFixed(2)+" km";
+  $("gpx").disabled=false;$("osm").disabled=false;
+  if(!MAP)return;
+  if(LAYER)MAP.removeLayer(LAYER);
+  LAYER=L.polyline(x.line,{color:"#e0533d",weight:5,opacity:.9}).addTo(MAP);
+  MAP.fitBounds(LAYER.getBounds(),{padding:[24,24]});
+}
+function setStart(la,lo){
+  START=[la,lo];
+  if(MAP){MARK.setLatLng(START);MAP.setView(START,11);}
+  search();
+}
+
+/* ---------- export ---------- */
+function gpx(x,sesName){
+  var L=['<?xml version="1.0" encoding="UTF-8"?>',
+   '<gpx version="1.1" creator="velo-routes" xmlns="http://www.topografix.com/GPX/1/1">',
+   '<metadata><name>'+esc(x.name+" — "+sesName)+'</name></metadata>',
+   '<trk><name>'+esc(x.name)+" ("+x.km.toFixed(2)+" km)"+'</name><trkseg>'];
+  for(var i=0;i<x.line.length;i++)
+    L.push('<trkpt lat="'+x.line[i][0].toFixed(6)+'" lon="'+x.line[i][1].toFixed(6)+'"/>');
+  L.push('</trkseg></trk></gpx>','');
+  return L.join("\n");
+}
+function dl(name,text){
+  var b=new Blob([text],{type:"application/gpx+xml"});
+  var u=URL.createObjectURL(b),a=document.createElement("a");
+  a.href=u;a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(u);a.remove();},1500);
+}
+
+/* ---------- demarrage ---------- */
+function build(){
+  var s=$("ses");
+  for(var i=0;i<SES.length;i++){
+    var o=document.createElement("option");o.textContent=SES[i].n;s.appendChild(o);
+  }
+  loadPrefs();
+  $("radv").textContent=$("rad").value;
+  $("rad").oninput=function(){$("radv").textContent=this.value;};
+  var redo=function(){savePrefs();search();};
+  $("ses").onchange=redo; $("mode").onchange=redo; $("ftp").onchange=redo;
+  $("pos").onchange=redo; $("temp").onchange=redo;
+  $("rad").onchange=redo;
+  $("start").onchange=function(){
+    savePrefs();
+    if(this.value==="geo"){
+      if(!navigator.geolocation){alert("Géolocalisation indisponible.");return;}
+      navigator.geolocation.getCurrentPosition(
+        function(p){setStart(p.coords.latitude,p.coords.longitude);},
+        function(){alert("Position refusée ou indisponible.");});
+    }else{
+      var p=this.value.split(",");setStart(+p[0],+p[1]);
+    }
+  };
+  $("gpx").onclick=function(){
+    var x=HITS[SEL];if(!x)return;
+    dl(x.name.replace(/[^\w\- ]+/g,"_")+" "+x.km.toFixed(1)+"km.gpx",gpx(x,opts().ses.n));
+  };
+  $("osm").onclick=function(){
+    var x=HITS[SEL];if(!x)return;
+    var m=x.line[Math.floor(x.line.length/2)];
+    window.open("https://www.openstreetmap.org/#map=14/"+m[0].toFixed(5)+"/"+m[1].toFixed(5),"_blank");
+  };
+  var sv=$("start").value;
+  if(sv&&sv!=="geo"){var p=sv.split(",");START=[+p[0],+p[1]];}
+  initMap();
+  fetch("data/index.json").then(function(r){
+    if(!r.ok)throw new Error("HTTP "+r.status);return r.json();
+  }).then(function(d){
+    DATA=d;
+    $("hdr").textContent=d.n.toLocaleString("fr-FR")+" portions · "+
+      d.zones.map(function(z){return z.name;}).join(" et ");
+    search();
+  }).catch(function(e){
+    $("hdr").textContent="index introuvable";
+    $("list").innerHTML='<div class="empty">L\'index n\'a pas pu être chargé ('+esc(e.message)+
+      ').<br>Lance <span class="mono">py.bat src\\web_index.py web\\data\\index.json '+
+      'data\\stretches_angers80dem.json data\\stretches_beaufou80.json</span>, '+
+      'puis sers le dossier <span class="mono">web</span> en HTTP.</div>';
+  });
+  if("serviceWorker" in navigator){
+    window.addEventListener("load",function(){
+      navigator.serviceWorker.register("sw.js").catch(function(){});
+    });
+  }
+}
+build();
+</script>
+</body>
+</html>
