@@ -356,11 +356,16 @@ function buildLoop(){
   var box=$("loopBox");
   box.innerHTML='<div class="ldg">Calcul des liaisons par BRouter…</div>';
   $("loop").disabled=true;
-  var a=x.line[0], b=x.line[x.line.length-1];
+  // on entre par l'extremite la plus proche du depart : sinon l'approche peut
+  // faire le double du retour, ce qui gonfle la boucle sans rien apporter
+  var e0=x.line[0], e1=x.line[x.line.length-1];
+  var flip=hav(START[0],START[1],e1[0],e1[1])<hav(START[0],START[1],e0[0],e0[1]);
+  var ligne=flip?x.line.slice().reverse():x.line;
+  var a=ligne[0], b=ligne[ligne.length-1];
   var aller=x.direct?b:a;          // en aller-retour on revient au depart de la portion
   Promise.all([brouter(START,a), brouter(aller,START)]).then(function(r){
     var approche=r[0], retour=r[1];
-    var coeur=x.direct?x.line:x.line.concat(x.line.slice().reverse());
+    var coeur=x.direct?ligne:ligne.concat(ligne.slice().reverse());
     var full=approche.line.concat(coeur, retour.line);
     var mCoeur=x.km*1000*(x.direct?1:2);
     var mTot=approche.m+mCoeur+retour.m;
