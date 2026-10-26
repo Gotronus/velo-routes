@@ -356,8 +356,11 @@ function buildLoop(){
   var box=$("loopBox");
   box.innerHTML='<div class="ldg">Calcul des liaisons par BRouter…</div>';
   $("loop").disabled=true;
-  // on entre par l'extremite la plus proche du depart : sinon l'approche peut
-  // faire le double du retour, ce qui gonfle la boucle sans rien apporter
+  // On entre par l'extremite la plus proche du depart. Attention : cela ne
+  // raccourcit PAS la boucle — le total vaut approche + portion + retour quel
+  // que soit le sens, et les deux liaisons ne font qu'echanger leurs longueurs.
+  // Le seul vrai gain est d'arriver frais sur l'intervalle plutot qu'apres la
+  // longue liaison, ce qui compte pour une seance de qualite.
   var e0=x.line[0], e1=x.line[x.line.length-1];
   var flip=hav(START[0],START[1],e1[0],e1[1])<hav(START[0],START[1],e0[0],e0[1]);
   var ligne=flip?x.line.slice().reverse():x.line;
@@ -381,7 +384,9 @@ function buildLoop(){
       (x.direct?'intervalle sur '+x.km.toFixed(2)+' km':'aller-retour sur '+x.km.toFixed(2)+' km')+
       ' · retour '+(retour.m/1000).toFixed(1)+' km.<br>'+
       '<span class="sub">Liaisons estimées à '+Math.round(pwE)+' W, intervalle à '+
-      Math.round(pwI)+' W. Les liaisons sont routées par BRouter sur le profil fastbike, '+
+      Math.round(pwI)+' W. On entre par l\'extrémité la plus proche pour arriver frais sur '+
+      'l\'intervalle — le total change à peine dans l\'autre sens, seules les deux liaisons '+
+      'échangent leurs longueurs. Les liaisons sont routées par BRouter en profil fastbike, '+
       'sans vérification des arrêts : seule la portion centrale est garantie sans interruption.</span></div>';
     $("gpxloop").hidden=false; $("gpxloop").disabled=false; $("loop").disabled=false;
     if(MAP){
