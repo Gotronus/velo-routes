@@ -2,11 +2,12 @@
    l'appli s'ouvre et cherche sans reseau. Les tuiles de carte ne sont PAS
    mises en cache a l'avance : sans reseau la carte reste vide, mais les
    portions s'affichent et le GPX s'exporte quand meme. */
-var V = "vr-v1";
+var V = "vr-v2";
 var SHELL = [
   "./", "./index.html", "./manifest.webmanifest",
   "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./favicon-32.png",
   "./data/index.json",
+  "./data/sessions.json",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
 ];

@@ -132,10 +132,13 @@ details{margin-top:8px}
 <div class="card">
   <div id="map"></div>
   <div class="btnrow" style="margin-top:10px">
-    <button id="gpx" disabled>Télécharger le GPX</button>
+    <button id="gpx" disabled>GPX de la portion</button>
+    <button id="loop" disabled class="primary">Construire la boucle</button>
+    <button id="gpxloop" disabled hidden>GPX de la boucle</button>
     <button id="osm" disabled>Ouvrir dans OpenStreetMap</button>
     <span class="sub" id="selinfo"></span>
   </div>
+  <div id="loopBox"></div>
 </div>
 
 <div class="card">
@@ -165,9 +168,11 @@ function speedFor(pw,grade,cda,rho){
     if(powerFor(m,grade,cda,rho)<pw)lo=m;else hi=m;}
   return 0.5*(lo+hi);
 }
-/* ---------- seances : duree d'un intervalle et fraction de FTP ----------
-   Les fractions viennent des structures ecrites des seances du Training Lab,
-   pas des IF du catalogue (qui sont optimistes de 8 a 22 %). */
+/* ---------- seances ----------
+   Chargees depuis data/sessions.json, exporte du catalogue du Training Lab.
+   Pour chaque seance, `s` est la duree du PLUS LONG bloc de travail et `f`
+   sa fraction de FTP : c'est ce bloc-la que la route doit tenir. La liste
+   ci-dessous n'est qu'un repli si le fichier ne charge pas. */
 var SES=[
  {id:"t2x25", n:"2 × 25 min au seuil",  s:1500, f:1.00},
  {id:"t3x20", n:"3 × 20 min au seuil",  s:1200, f:0.99},
@@ -308,7 +313,10 @@ function select(i){
   SEL=i;render();
   var x=HITS[i];if(!x)return;
   $("selinfo").textContent=x.name+" · "+x.km.toFixed(2)+" km";
-  $("gpx").disabled=false;$("osm").disabled=false;
+  $("gpx").disabled=false;$("osm").disabled=false;$("loop").disabled=false;
+  $("gpxloop").hidden=true;$("gpxloop").disabled=true;LOOP=null;
+  $("loopBox").innerHTML="";
+  if(LOOPLAYER&&MAP){MAP.removeLayer(LOOPLAYER);LOOPLAYER=null;}
   if(!MAP)return;
   if(LAYER)MAP.removeLayer(LAYER);
   LAYER=L.polyline(x.line,{color:"#e0533d",weight:5,opacity:.9}).addTo(MAP);
@@ -320,7 +328,81 @@ function setStart(la,lo){
   search();
 }
 
+/* ---------- construction de la boucle ----------
+   La portion trouvee ne suffit pas : il faut y aller et en revenir. On
+   demande les deux liaisons au serveur public BRouter, qui route sur les
+   vraies routes OSM avec un profil velo. C'est le seul endroit de l'appli
+   qui a besoin du reseau : hors connexion, le GPX de la portion seule reste
+   disponible. */
+var LOOP=null, LOOPLAYER=null;
+function brouter(a,b){
+  var u="https://brouter.de/brouter?lonlats="+a[1].toFixed(6)+","+a[0].toFixed(6)+
+        "|"+b[1].toFixed(6)+","+b[0].toFixed(6)+
+        "&profile=fastbike&alternativeidx=0&format=geojson";
+  return fetch(u).then(function(r){
+    if(!r.ok)throw new Error("BRouter HTTP "+r.status);
+    return r.json();
+  }).then(function(j){
+    var f=j&&j.features&&j.features[0];
+    if(!f||!f.geometry||!f.geometry.coordinates)throw new Error("réponse BRouter inattendue");
+    var p=f.properties||{};
+    return {line:f.geometry.coordinates.map(function(c){return [c[1],c[0]];}),
+            m:+p["track-length"]||0, asc:+p["filtered ascend"]||0};
+  });
+}
+function buildLoop(){
+  var x=HITS[SEL]; if(!x)return;
+  var o=opts();
+  var box=$("loopBox");
+  box.innerHTML='<div class="ldg">Calcul des liaisons par BRouter…</div>';
+  $("loop").disabled=true;
+  var a=x.line[0], b=x.line[x.line.length-1];
+  var aller=x.direct?b:a;          // en aller-retour on revient au depart de la portion
+  Promise.all([brouter(START,a), brouter(aller,START)]).then(function(r){
+    var approche=r[0], retour=r[1];
+    var coeur=x.direct?x.line:x.line.concat(x.line.slice().reverse());
+    var full=approche.line.concat(coeur, retour.line);
+    var mCoeur=x.km*1000*(x.direct?1:2);
+    var mTot=approche.m+mCoeur+retour.m;
+    // temps : liaisons a l'allure d'endurance, coeur a la puissance de la seance
+    var pwE=o.ftp*0.65, pwI=o.ftp*o.ses.f;
+    var vE=speedFor(pwE,0,o.cda,o.rho), vI=speedFor(pwI,x.grade/100,o.cda,o.rho);
+    var tTot=(approche.m+retour.m)/vE+mCoeur/vI;
+    LOOP={line:full, m:mTot, t:tTot, asc:approche.asc+retour.asc+x.gain*(x.direct?1:2),
+          approche:approche.m, retour:retour.m, coeur:mCoeur, x:x, ses:o.ses.n};
+    box.innerHTML='<div class="need"><b>Boucle complète</b> : '+(mTot/1000).toFixed(1)+' km, '+
+      fmin(tTot)+', '+Math.round(LOOP.asc)+' m D+.<br>'+
+      'Approche '+(approche.m/1000).toFixed(1)+' km · '+
+      (x.direct?'intervalle sur '+x.km.toFixed(2)+' km':'aller-retour sur '+x.km.toFixed(2)+' km')+
+      ' · retour '+(retour.m/1000).toFixed(1)+' km.<br>'+
+      '<span class="sub">Liaisons estimées à '+Math.round(pwE)+' W, intervalle à '+
+      Math.round(pwI)+' W. Les liaisons sont routées par BRouter sur le profil fastbike, '+
+      'sans vérification des arrêts : seule la portion centrale est garantie sans interruption.</span></div>';
+    $("gpxloop").hidden=false; $("gpxloop").disabled=false; $("loop").disabled=false;
+    if(MAP){
+      if(LOOPLAYER)MAP.removeLayer(LOOPLAYER);
+      LOOPLAYER=L.polyline(full,{color:"#0f6fd6",weight:3,opacity:.65}).addTo(MAP);
+      MAP.fitBounds(LOOPLAYER.getBounds(),{padding:[24,24]});
+    }
+  }).catch(function(e){
+    box.innerHTML='<div class="warn"><b>Liaisons indisponibles.</b> '+esc(e.message||"réseau")+
+      '. Le GPX de la portion seule reste téléchargeable — c\'est la partie qui compte, '+
+      'les liaisons tu les connais.</div>';
+    $("loop").disabled=false;
+  });
+}
+
 /* ---------- export ---------- */
+function gpxLoop(){
+  var L2=['<?xml version="1.0" encoding="UTF-8"?>',
+   '<gpx version="1.1" creator="velo-routes" xmlns="http://www.topografix.com/GPX/1/1">',
+   '<metadata><name>'+esc("Boucle "+LOOP.ses+" — "+LOOP.x.name)+'</name></metadata>',
+   '<trk><name>'+esc(LOOP.x.name+" — boucle "+(LOOP.m/1000).toFixed(1)+" km")+'</name><trkseg>'];
+  for(var i=0;i<LOOP.line.length;i++)
+    L2.push('<trkpt lat="'+LOOP.line[i][0].toFixed(6)+'" lon="'+LOOP.line[i][1].toFixed(6)+'"/>');
+  L2.push('</trkseg></trk></gpx>','');
+  return L2.join("\n");
+}
 function gpx(x,sesName){
   var L=['<?xml version="1.0" encoding="UTF-8"?>',
    '<gpx version="1.1" creator="velo-routes" xmlns="http://www.topografix.com/GPX/1/1">',
@@ -362,6 +444,11 @@ function build(){
       var p=this.value.split(",");setStart(+p[0],+p[1]);
     }
   };
+  $("loop").onclick=buildLoop;
+  $("gpxloop").onclick=function(){
+    if(!LOOP)return;
+    dl("boucle "+LOOP.x.name.replace(/[^\w\- ]+/g,"_")+" "+(LOOP.m/1000).toFixed(0)+"km.gpx",gpxLoop());
+  };
   $("gpx").onclick=function(){
     var x=HITS[SEL];if(!x)return;
     dl(x.name.replace(/[^\w\- ]+/g,"_")+" "+x.km.toFixed(1)+"km.gpx",gpx(x,opts().ses.n));
@@ -374,7 +461,19 @@ function build(){
   var sv=$("start").value;
   if(sv&&sv!=="geo"){var p=sv.split(",");START=[+p[0],+p[1]];}
   initMap();
-  fetch("data/index.json").then(function(r){
+  fetch("data/sessions.json").then(function(r){
+    if(!r.ok)throw 0; return r.json();
+  }).then(function(list){
+    if(list&&list.length){
+      SES=list.map(function(x){return {id:x.id,n:x.n+" · "+Math.round(x.s/60)+" min",
+        s:x.s,f:x.f,min:x.min,tss:x.tss};});
+      var sel=$("ses"),keep=sel.selectedIndex;
+      sel.innerHTML="";
+      SES.forEach(function(o){var e=document.createElement("option");e.textContent=o.n;sel.appendChild(e);});
+      sel.selectedIndex=Math.min(keep<0?0:keep,SES.length-1);
+    }
+  }).catch(function(){/* on garde la liste de repli */})
+  .then(function(){ return fetch("data/index.json"); }).then(function(r){
     if(!r.ok)throw new Error("HTTP "+r.status);return r.json();
   }).then(function(d){
     DATA=d;
