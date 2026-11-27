@@ -3,7 +3,7 @@
 
 P = v*m*g*(sin th + Crr*cos th) + 0.5*rho*CdA*v^3
 
-Les constantes par defaut sont celles d'Axel : CdA 0,29 m2 mains en bas
+Les constantes par defaut sont celles du cycliste de reference : CdA 0,29 m2 mains en bas
 (Crouch et coll. 2017), Crr 0,005 route courante, masse totale 76 kg.
 Ce sont des moyennes de litterature, pas des mesures.
 """
