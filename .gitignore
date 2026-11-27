@@ -13,3 +13,17 @@ web_index*.txt
 # python
 __pycache__/
 *.pyc
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# Claude Code : fichiers personnels et worktrees
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/worktrees/
+
+# systeme
+Thumbs.db
+desktop.ini
